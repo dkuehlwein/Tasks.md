@@ -9,12 +9,22 @@ const multer = require("@koa/multer");
 const mount = require("koa-mount");
 const serve = require("koa-static");
 
+const { McpServer, StreamableHTTPServerTransport } = require("@modelcontextprotocol/sdk/server");
+const { z } = require("zod"); // MCP examples use Zod for schema validation
+
 const PUID = Number(process.env.PUID);
 const PGID = Number(process.env.PGID);
 const BASE_PATH =
   process.env.BASE_PATH.at(-1) === "/"
     ? process.env.BASE_PATH
     : `${process.env.BASE_PATH}/`;
+
+// Instantiate MCP Server
+const mcpServer = new McpServer({
+  name: "tasks-mcp-server",
+  version: "1.0.0",
+  // We will define resources and tools later
+});
 
 const multerInstance = multer();
 

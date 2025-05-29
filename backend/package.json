@@ -12,7 +12,15 @@
     "uuid": "^9.0.0",
     "zod": "^3.23.0"
   },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3",
+    "@types/jest": "^29.5.8"
+  },
   "scripts": {
-    "start": "cross-env PORT='8080' CONFIG_DIR='config' TASKS_DIR='tasks' BASE_PATH='/' PUID='1000' PGID='1000' LOCAL_IMAGES_CLEANUP_INTERVAL='1440' node server.js"
+    "start": "cross-env PORT='8080' CONFIG_DIR='config' TASKS_DIR='tasks' BASE_PATH='/' PUID='1000' PGID='1000' LOCAL_IMAGES_CLEANUP_INTERVAL='1440' node server.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   }
 }

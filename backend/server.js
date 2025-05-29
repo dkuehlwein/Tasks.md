@@ -9,7 +9,7 @@ const multer = require("@koa/multer");
 const mount = require("koa-mount");
 const serve = require("koa-static");
 
-const { McpServer, StreamableHTTPServerTransport } = require("@modelcontextprotocol/sdk/server");
+const { McpServer } = require("@modelcontextprotocol/sdk/server");
 const { z } = require("zod"); // MCP examples use Zod for schema validation
 
 const PUID = Number(process.env.PUID);
@@ -23,7 +23,53 @@ const BASE_PATH =
 const mcpServer = new McpServer({
   name: "tasks-mcp-server",
   version: "1.0.0",
-  // We will define resources and tools later
+}, {
+  capabilities: {
+    tools: {},
+  },
+});
+
+// MCP Tool: List all available lanes
+mcpServer.setRequestHandler("tools/list", async () => {
+  return {
+    tools: [
+      {
+        name: "list_lanes",
+        description: "List all available task lanes/columns",
+        inputSchema: {
+          type: "object",
+          properties: {},
+        },
+      },
+    ],
+  };
+});
+
+mcpServer.setRequestHandler("tools/call", async (request) => {
+  const { name, arguments: args } = request.params;
+
+  switch (name) {
+    case "list_lanes":
+      try {
+        const lanes = await getLanesNames();
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                lanes: lanes,
+                total: lanes.length
+              }, null, 2)
+            }
+          ]
+        };
+      } catch (error) {
+        throw new Error(`Failed to list lanes: ${error.message}`);
+      }
+
+    default:
+      throw new Error(`Unknown tool: ${name}`);
+  }
 });
 
 const multerInstance = multer();
@@ -424,5 +470,32 @@ if (process.env.LOCAL_IMAGES_CLEANUP_INTERVAL) {
     console.error(error);
   }
 }
+
+// MCP HTTP Transport Setup
+async function setupMCPTransport() {
+  try {
+    // Add MCP endpoint to Koa router
+    router.post("/mcp", async (ctx) => {
+      try {
+        const request = ctx.request.body;
+        const response = await mcpServer.handleRequest(request);
+        ctx.body = response;
+        ctx.status = 200;
+      } catch (error) {
+        console.error("MCP request error:", error);
+        ctx.status = 500;
+        ctx.body = { error: error.message };
+      }
+    });
+
+    console.log("MCP server configured with HTTP transport");
+    console.log(`MCP endpoint available at: http://localhost:${process.env.PORT}/mcp`);
+  } catch (error) {
+    console.error("Failed to setup MCP transport:", error);
+  }
+}
+
+// Initialize MCP transport
+setupMCPTransport();
 
 app.listen(process.env.PORT);

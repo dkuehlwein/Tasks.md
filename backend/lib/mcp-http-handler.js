@@ -79,7 +79,7 @@ class MCPHttpHandler {
           code: -32600,
           message: "Invalid session. Please initialize first.",
         },
-        id: requestBody.id || null
+        id: requestBody.id || "error-" + Date.now()
       };
       return;
     }
@@ -91,7 +91,7 @@ class MCPHttpHandler {
       result: {
         tools: this.mcpServer.getToolDefinitions()
       },
-      id: requestBody.id || null
+      id: requestBody.id || "tools-" + Date.now()
     };
   }
 
@@ -107,7 +107,7 @@ class MCPHttpHandler {
             code: -32600,
             message: "Invalid session. Please initialize first.",
           },
-          id: requestBody.id || null
+          id: requestBody.id || "error-" + Date.now()
         };
         return;
       }
@@ -152,7 +152,7 @@ class MCPHttpHandler {
       ctx.body = {
         jsonrpc: "2.0",
         result,
-        id: requestBody.id || null
+        id: requestBody.id || "call-" + Date.now()
       };
     } catch (error) {
       ctx.status = 400;
@@ -163,7 +163,7 @@ class MCPHttpHandler {
           message: "Invalid tool call",
           data: error.message
         },
-        id: requestBody.id || null
+        id: requestBody.id || "error-" + Date.now()
       };
     }
   }
@@ -193,7 +193,7 @@ class MCPHttpHandler {
         },
         serverInfo: this.mcpServer.getServerInfo()
       },
-      id: requestBody.id || null
+      id: requestBody.id || "init-" + Date.now()
     };
     
     console.log(`🔐 MCP session created: ${sessionId}`);
@@ -210,7 +210,8 @@ class MCPHttpHandler {
         error: {
           code: -32600,
           message: "Invalid session ID"
-        }
+        },
+        id: requestBody?.id || "notification-error-" + Date.now()
       };
       return;
     }
@@ -224,7 +225,7 @@ class MCPHttpHandler {
     ctx.set('Content-Type', 'application/json');
     ctx.body = {
       jsonrpc: "2.0"
-      // Note: notifications/initialized typically doesn't have a result
+      // Note: notifications/initialized typically doesn't have a result or id
     };
     
     console.log(`✅ MCP session initialized: ${sessionId}`);
@@ -243,7 +244,7 @@ class MCPHttpHandler {
         },
         serverInfo: this.mcpServer.getServerInfo()
       },
-      id: requestBody?.id || null
+      id: requestBody?.id || "default-" + Date.now()
     };
     
     console.log(`📡 MCP request handled: ${ctx.method} ${ctx.path}`);

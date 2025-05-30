@@ -9,7 +9,7 @@ const multer = require("@koa/multer");
 const mount = require("koa-mount");
 const serve = require("koa-static");
 
-const { McpServer } = require("@modelcontextprotocol/sdk/server");
+const { McpServer } = require("./node_modules/@modelcontextprotocol/sdk/dist/cjs/server/mcp");
 const { z } = require("zod"); // MCP examples use Zod for schema validation
 
 const PUID = Number(process.env.PUID);
@@ -23,54 +23,34 @@ const BASE_PATH =
 const mcpServer = new McpServer({
   name: "tasks-mcp-server",
   version: "1.0.0",
-}, {
-  capabilities: {
-    tools: {},
-  },
 });
 
 // MCP Tool: List all available lanes
-mcpServer.setRequestHandler("tools/list", async () => {
-  return {
-    tools: [
-      {
-        name: "list_lanes",
-        description: "List all available task lanes/columns",
-        inputSchema: {
-          type: "object",
-          properties: {},
-        },
-      },
-    ],
-  };
-});
-
-mcpServer.setRequestHandler("tools/call", async (request) => {
-  const { name, arguments: args } = request.params;
-
-  switch (name) {
-    case "list_lanes":
-      try {
-        const lanes = await getLanesNames();
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({
-                lanes: lanes,
-                total: lanes.length
-              }, null, 2)
-            }
-          ]
-        };
-      } catch (error) {
-        throw new Error(`Failed to list lanes: ${error.message}`);
-      }
-
-    default:
-      throw new Error(`Unknown tool: ${name}`);
+mcpServer.tool(
+  "list_lanes",
+  {},
+  async () => {
+    try {
+      const lanes = await getLanesNames();
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              lanes: lanes,
+              total: lanes.length
+            }, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `Error: ${error.message}` }],
+        isError: true
+      };
+    }
   }
-});
+);
 
 const multerInstance = multer();
 

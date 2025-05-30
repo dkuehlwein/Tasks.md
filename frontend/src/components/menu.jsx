@@ -69,7 +69,11 @@ export function Menu(props) {
 						<button
 							type="button"
 							popoverTarget={option.popoverTarget}
-							onClick={() => handleOptionClick(option)}
+							onClick={(e) => {
+								e.stopPropagation();
+								e.stopImmediatePropagation();
+								handleOptionClick(option);
+							}}
 							onKeyDown={(e) =>
 								handleKeyDown(
 									e,

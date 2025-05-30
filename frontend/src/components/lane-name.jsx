@@ -13,6 +13,7 @@ import { IconPlusSm, IconEllipsisVertical } from '@stackoverflow/stacks-icons/ic
  * @param {Function} props.onDelete
  * @param {Function} props.onDragStart
  * @param {Function} props.onCreateNewCardBtnClick
+ * @param {boolean} props.isCreatingCard
  */
 export function LaneName(props) {
 	const [showMenu, setShowMenu] = createSignal(false);
@@ -69,8 +70,9 @@ export function LaneName(props) {
 					title="Create new card"
 					class="small"
 					onClick={() => props.onCreateNewCardBtnClick()}
+					disabled={props.isCreatingCard}
 				>
-					<span innerHTML={IconPlusSm} />
+					<span innerHTML={props.isCreatingCard ? "..." : IconPlusSm} />
 				</button>
 				<button
 					type="button"

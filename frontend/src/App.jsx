@@ -39,6 +39,7 @@ function App() {
 	const [newLaneName, setNewLaneName] = createSignal(null);
 	const [cardBeingRenamed, setCardBeingRenamed] = createSignal(null);
 	const [newCardName, setNewCardName] = createSignal(null);
+	const [isCreatingCard, setIsCreatingCard] = createSignal(false);
 
 	function fetchTitle() {
 		return fetch(`${api}/title`).then((res) => res.text());
@@ -63,44 +64,66 @@ function App() {
 	}
 
 	async function fetchCards() {
-		const tagsReq = fetch(`${api}/tags`, { method: "GET", mode: "cors" }).then(
-			(res) => res.json(),
-		);
-		const cardsReq = fetch(`${api}/cards`, {
-			method: "GET",
-			mode: "cors",
-		}).then((res) => res.json());
-		const cardsSortReq = fetch(`${api}/sort/cards`, { method: "GET" }).then(
-			(res) => res.json(),
-		);
-		const [tags, cardsFromApi, cardsSort] = await Promise.all([
-			tagsReq,
-			cardsReq,
-			cardsSortReq,
-		]);
-		setTagsOptions(tags);
-		const cardsFromApiAndSorted = cardsSort
-			.map((cardNameFromLocalStorage) =>
-				cardsFromApi.find(
-					(cardFromApi) => cardFromApi.name === cardNameFromLocalStorage,
-				),
-			)
-			.filter((card) => !!card);
-		const cardsFromApiNotYetSorted = cardsFromApi.filter(
-			(card) =>
-				!cardsSort.find(
-					(cardNameFromLocalStorage) => cardNameFromLocalStorage === card.name,
-				),
-		);
-		const newCards = [...cardsFromApiAndSorted, ...cardsFromApiNotYetSorted];
-		const newCardsWithTags = newCards.map((card) => {
-			const newCard = structuredClone(card);
-			const cardTagsNames = getTags(card.content) || [];
-			newCard.tags = getTagsByTagNames(tags, cardTagsNames);
-			return newCard;
-		});
-		console.log(newCardsWithTags)
-		setCards(newCardsWithTags);
+		try {
+			const tagsReq = fetch(`${api}/tags`, { method: "GET", mode: "cors" }).then(
+				(res) => res.json(),
+			);
+			const cardsReq = fetch(`${api}/cards`, {
+				method: "GET",
+				mode: "cors",
+			}).then((res) => res.json());
+			const cardsSortReq = fetch(`${api}/sort/cards`, { method: "GET" }).then(
+				(res) => res.json(),
+			);
+			const [tags, cardsFromApi, cardsSort] = await Promise.all([
+				tagsReq,
+				cardsReq,
+				cardsSortReq,
+			]);
+			
+			console.log("Raw API responses - tags:", tags, "cards:", cardsFromApi.length, "cardsSort:", cardsSort);
+			
+			// Handle tags - ensure it's an array
+			const tagsArray = Array.isArray(tags) ? tags : [];
+			
+			// Handle cardsSort - convert object to flat array if needed
+			let cardsSortArray = [];
+			if (Array.isArray(cardsSort)) {
+				cardsSortArray = cardsSort;
+			} else if (cardsSort && typeof cardsSort === 'object') {
+				// Convert object like {"Todo": ["card1"], "Doing": ["card2"]} to flat array
+				cardsSortArray = Object.values(cardsSort).flat();
+			}
+			
+			console.log("Processed data - tags:", tagsArray.length, "cardsSort:", cardsSortArray.length);
+			
+			setTagsOptions(tagsArray);
+			
+			const cardsFromApiAndSorted = cardsSortArray
+				.map((cardNameFromLocalStorage) =>
+					cardsFromApi.find(
+						(cardFromApi) => cardFromApi.name === cardNameFromLocalStorage,
+					),
+				)
+				.filter((card) => !!card);
+			const cardsFromApiNotYetSorted = cardsFromApi.filter(
+				(card) =>
+					!cardsSortArray.find(
+						(cardNameFromLocalStorage) => cardNameFromLocalStorage === card.name,
+					),
+			);
+			const newCards = [...cardsFromApiAndSorted, ...cardsFromApiNotYetSorted];
+			const newCardsWithTags = newCards.map((card) => {
+				const newCard = structuredClone(card);
+				const cardTagsNames = getTags(card.content) || [];
+				newCard.tags = getTagsByTagNames(tagsArray, cardTagsNames);
+				return newCard;
+			});
+			console.log("Final cards to display:", newCardsWithTags.length);
+			setCards(newCardsWithTags);
+		} catch (error) {
+			console.error("Error fetching cards:", error);
+		}
 	}
 
 	async function fetchLanes() {
@@ -115,9 +138,6 @@ function App() {
 			lanesFromApiReq,
 			lanesSortedReq,
 		]);
-		if (lanesFromApi.length <= lanes().length) {
-			return;
-		}
 		const lanesFromApiAndSorted = lanesSorted
 			.filter((sortedLane) => lanesFromApi.find((lane) => lane === sortedLane))
 			.map((lane) => lanesFromApi.find((laneFromApi) => laneFromApi === lane));
@@ -153,16 +173,20 @@ function App() {
 		);
 		const newCard = newCards[newCardIndex];
 		newCard.content = newContent;
-		await fetch(`${api}/cards/${newCard.name}`, {
-			method: "PATCH",
+		await fetch(`${api}/lanes/${newCard.lane}/cards/${newCard.name}`, {
+			method: "PUT",
 			mode: "cors",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ content: newContent }),
 		});
-		const newTagsOptions = await fetch(`${api}/tags`, {
+		const newTagsResponse = await fetch(`${api}/tags`, {
 			method: "GET",
 			mode: "cors",
 		}).then((res) => res.json());
+		
+		// Handle the tags API response format {all: [], used: []}
+		const newTagsOptions = Array.isArray(newTagsResponse) ? newTagsResponse : (newTagsResponse?.used || []);
+		
 		const justAddedTags = newTagsOptions.filter(
 			(newTagOption) =>
 				!tagsOptions().some(
@@ -230,30 +254,54 @@ function App() {
 	}
 
 	async function createNewCard(lane) {
-		const newCards = structuredClone(cards());
-		const newCard = { lane };
-		const newCardName = await fetch(`${api}/cards`, {
-			method: "POST",
-			mode: "cors",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ lane: newCard.lane }),
-		}).then((res) => res.text());
-		newCard.name = newCardName;
-		newCards.unshift(newCard);
-		setCards(newCards);
-		startRenamingCard(cards()[0]);
+		if (isCreatingCard()) {
+			console.log("Card creation already in progress");
+			return;
+		}
+		
+		try {
+			setIsCreatingCard(true);
+			console.log("Creating new card in lane:", lane);
+			const newCardName = await fetch(`${api}/cards`, {
+				method: "POST",
+				mode: "cors",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ lane: lane }),
+			}).then((res) => res.text());
+			
+			console.log("Created card with name:", newCardName);
+			
+			// Refresh cards from API to ensure consistency
+			await fetchCards();
+			
+			console.log("Cards after fetch:", cards().length);
+			
+			// Use requestAnimationFrame to ensure UI has updated before starting rename
+			requestAnimationFrame(() => {
+				const newCard = cards().find(card => card.name === newCardName && card.lane === lane);
+				if (newCard) {
+					console.log("Found new card, starting rename:", newCard);
+					startRenamingCard(newCard);
+				} else {
+					console.error("Could not find newly created card:", newCardName, "in lane:", lane);
+					console.error("Available cards:", cards().map(c => ({ name: c.name, lane: c.lane })));
+				}
+			});
+		} catch (error) {
+			console.error("Error creating new card:", error);
+		} finally {
+			setIsCreatingCard(false);
+		}
 	}
 
-	function deleteCard(card) {
-		const newCards = structuredClone(cards());
-		fetch(`${api}/cards/${card.name}`, {
+	async function deleteCard(card) {
+		await fetch(`${api}/lanes/${card.lane}/cards/${card.name}`, {
 			method: "DELETE",
 			mode: "cors",
 		});
-		const cardsWithoutDeletedCard = newCards.filter(
-			(cardToFind) => cardToFind.name !== card.name,
-		);
-		setCards(cardsWithoutDeletedCard);
+		
+		// Refresh cards from API to ensure consistency
+		await fetchCards();
 	}
 
 	async function createNewLane() {
@@ -340,32 +388,35 @@ function App() {
 		setSelectedCard(newCard);
 	}
 
-	function handleDeleteCardsByLane(lane) {
+	async function handleDeleteCardsByLane(lane) {
 		const cardsToDelete = cards().filter((card) => card.lane === lane);
 		for (const card of cardsToDelete) {
-			fetch(`${api}/cards/${card.name}`, { method: "DELETE", mode: "cors" });
+			await fetch(`${api}/lanes/${card.lane}/cards/${card.name}`, { method: "DELETE", mode: "cors" });
 		}
-		const cardsToKeep = cards().filter((card) => card.lane !== lane);
-		setCards(cardsToKeep);
+		
+		// Refresh cards from API to ensure consistency
+		await fetchCards();
 	}
 
-	function renameCard() {
+	async function renameCard() {
 		const newCards = structuredClone(cards());
 		const newCardIndex = newCards.findIndex(
 			(card) => card.name === cardBeingRenamed()?.name,
 		);
 		const newCard = newCards[newCardIndex];
 		const newCardNameWithoutSpaces = newCardName().trim();
-		fetch(`${api}/cards/${newCard.name}`, {
+		
+		await fetch(`${api}/lanes/${newCard.lane}/cards/${newCard.name}/rename`, {
 			method: "PATCH",
 			mode: "cors",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ name: newCardNameWithoutSpaces }),
 		});
-		newCard.name = newCardNameWithoutSpaces;
-		newCards[newCardIndex] = newCard;
-		setCards(newCards);
+		
 		setCardBeingRenamed(null);
+		
+		// Refresh cards from API to ensure consistency
+		await fetchCards();
 	}
 
 	async function handleTagColorChange() {
@@ -458,8 +509,8 @@ function App() {
 		if (!lanes().length) {
 			return;
 		}
-		fetch(`${api}/sort/lanes`, {
-			method: "POST",
+		fetch(`${api}/lanes/sort`, {
+			method: "PUT",
 			body: JSON.stringify(lanes()),
 			headers: {
 				Accept: "application/json",
@@ -469,13 +520,17 @@ function App() {
 		if (disableCardsDrag()) {
 			return;
 		}
-		const newCards = lanes().flatMap((lane) =>
-			cards().filter((card) => card.lane === lane),
-		);
-		const cardNames = newCards.map((card) => card.name);
-		fetch(`${api}/sort/cards`, {
-			method: "POST",
-			body: JSON.stringify(cardNames),
+		
+		// Build cards sort data structure: { lane: [cardNames] }
+		const cardsSortData = {};
+		lanes().forEach((lane) => {
+			const laneCards = cards().filter((card) => card.lane === lane);
+			cardsSortData[lane] = laneCards.map((card) => card.name);
+		});
+		
+		fetch(`${api}/cards/sort`, {
+			method: "PUT",
+			body: JSON.stringify(cardsSortData),
 			headers: {
 				Accept: "application/json",
 				"Content-Type": "application/json",
@@ -500,13 +555,16 @@ function App() {
 	function handleCardsSortChange(changedCard) {
 		const cardLane = changedCard.to.slice("lane-content-".length);
 		const cardName = changedCard.id.slice("card-".length);
-		fetch(`${api}/cards/${cardName}`, {
+		const oldIndex = cards().findIndex((card) => card.name === cardName);
+		const oldCard = cards()[oldIndex];
+		
+		fetch(`${api}/lanes/${oldCard.lane}/cards/${cardName}`, {
 			method: "PATCH",
 			mode: "cors",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ lane: cardLane }),
 		});
-		const oldIndex = cards().findIndex((card) => card.name === cardName);
+		
 		const newCard = cards()[oldIndex];
 		newCard.lane = cardLane;
 		const newCards = lanes().flatMap((lane) => {
@@ -571,6 +629,7 @@ function App() {
 											onCreateNewCardBtnClick={() => createNewCard(lane)}
 											onDelete={() => deleteLane(lane)}
 											onDeleteCards={() => handleDeleteCardsByLane(lane)}
+											isCreatingCard={isCreatingCard()}
 										/>
 									)}
 								</header>
@@ -630,6 +689,7 @@ function App() {
 			<Show when={!!selectedCard()}>
 				<ExpandedCard
 					name={selectedCard().name}
+					lane={selectedCard().lane}
 					content={selectedCard().content}
 					tags={selectedCard().tags || []}
 					tagsOptions={tagsOptions()}

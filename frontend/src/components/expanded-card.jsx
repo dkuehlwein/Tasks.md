@@ -162,7 +162,8 @@ function ExpandedCard(props) {
     if (isSameName) {
       return handleCardRenameCancel();
     }
-    fetch(`${api}/cards/${props.name}`, {
+    
+    fetch(`${api}/lanes/${props.lane}/cards/${props.name}/rename`, {
       method: "PATCH",
       mode: "cors",
       headers: { "Content-Type": "application/json" },

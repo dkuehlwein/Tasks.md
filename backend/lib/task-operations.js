@@ -270,6 +270,74 @@ async function createLane(laneName) {
   }
 }
 
+async function deleteLane(laneId) {
+  try {
+    const laneDir = `${process.env.TASKS_DIR}/${laneId}`;
+    await fs.promises.rm(laneDir, { recursive: true });
+    return { success: true, id: laneId };
+  } catch (error) {
+    throw new Error(`Failed to delete lane ${laneId}: ${error.message}`);
+  }
+}
+
+async function renameLane(oldLaneId, newLaneId) {
+  try {
+    const oldPath = `${process.env.TASKS_DIR}/${oldLaneId}`;
+    const newPath = `${process.env.TASKS_DIR}/${newLaneId}`;
+    
+    await fs.promises.rename(oldPath, newPath);
+    return { success: true, oldId: oldLaneId, newId: newLaneId };
+  } catch (error) {
+    throw new Error(`Failed to rename lane from ${oldLaneId} to ${newLaneId}: ${error.message}`);
+  }
+}
+
+async function moveTask(taskId, fromLane, toLane) {
+  try {
+    const oldPath = `${process.env.TASKS_DIR}/${fromLane}/${taskId}.md`;
+    const newPath = `${process.env.TASKS_DIR}/${toLane}/${taskId}.md`;
+    
+    // Read the content
+    const content = await getContent(oldPath);
+    
+    // Ensure destination lane exists
+    await fs.promises.mkdir(`${process.env.TASKS_DIR}/${toLane}`, { recursive: true });
+    await fs.promises.chown(`${process.env.TASKS_DIR}/${toLane}`, PUID, PGID);
+    
+    // Write to new location
+    await fs.promises.writeFile(newPath, content);
+    await fs.promises.chown(newPath, PUID, PGID);
+    
+    // Remove from old location
+    await fs.promises.rm(oldPath);
+    
+    return { success: true, id: taskId, fromLane, toLane };
+  } catch (error) {
+    throw new Error(`Failed to move task ${taskId} from ${fromLane} to ${toLane}: ${error.message}`);
+  }
+}
+
+async function renameTask(oldTaskId, newTaskId, lane) {
+  try {
+    const oldPath = `${process.env.TASKS_DIR}/${lane}/${oldTaskId}.md`;
+    const newPath = `${process.env.TASKS_DIR}/${lane}/${newTaskId}.md`;
+    
+    // Read content
+    const content = await getContent(oldPath);
+    
+    // Write with new name
+    await fs.promises.writeFile(newPath, content);
+    await fs.promises.chown(newPath, PUID, PGID);
+    
+    // Remove old file
+    await fs.promises.rm(oldPath);
+    
+    return { success: true, oldId: oldTaskId, newId: newTaskId, lane };
+  } catch (error) {
+    throw new Error(`Failed to rename task from ${oldTaskId} to ${newTaskId}: ${error.message}`);
+  }
+}
+
 module.exports = {
   getLanesNames,
   getMdFiles,
@@ -281,5 +349,9 @@ module.exports = {
   updateTask,
   deleteTask,
   getTaskContent,
-  createLane
+  createLane,
+  deleteLane,
+  renameLane,
+  moveTask,
+  renameTask
 }; 

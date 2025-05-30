@@ -53,11 +53,9 @@ Valid columns are: Backlog, Todo, In Progress, Done`
     // List all tasks from a file
     this.server.tool(
       "list_tasks",
+      "Get all tasks from a tasks.md file",
       {
         file_path: z.string().describe("Path to the tasks.md file")
-      },
-      {
-        description: "Get all tasks from a tasks.md file"
       },
       async ({ file_path }) => {
         try {
@@ -83,15 +81,13 @@ Valid columns are: Backlog, Todo, In Progress, Done`
     // Add a new task
     this.server.tool(
       "add_task",
+      "Add a new task to a kanban board",
       {
         file_path: z.string().describe("Path to the tasks.md file"),
         title: z.string().describe("Title of the new task"),
         column: z.enum(["Backlog", "Todo", "In Progress", "Done"]).describe("Column to add the task to"),
         description: z.string().optional().describe("Optional description for the task"),
         tags: z.array(z.string()).optional().describe("Optional tags for the task")
-      },
-      {
-        description: "Add a new task to a kanban board"
       },
       async ({ file_path, title, column, description, tags }) => {
         try {
@@ -117,6 +113,7 @@ Valid columns are: Backlog, Todo, In Progress, Done`
     // Update an existing task
     this.server.tool(
       "update_task",
+      "Update an existing task",
       {
         file_path: z.string().describe("Path to the tasks.md file"),
         task_id: z.string().describe("ID of the task to update"),
@@ -125,9 +122,6 @@ Valid columns are: Backlog, Todo, In Progress, Done`
           description: z.string().optional(),
           tags: z.array(z.string()).optional()
         }).describe("Fields to update")
-      },
-      {
-        description: "Update an existing task"
       },
       async ({ file_path, task_id, updates }) => {
         try {
@@ -153,12 +147,10 @@ Valid columns are: Backlog, Todo, In Progress, Done`
     // Delete a task
     this.server.tool(
       "delete_task",
+      "Delete a task from the kanban board",
       {
         file_path: z.string().describe("Path to the tasks.md file"),
         task_id: z.string().describe("ID of the task to delete")
-      },
-      {
-        description: "Delete a task from the kanban board"
       },
       async ({ file_path, task_id }) => {
         try {
@@ -184,13 +176,11 @@ Valid columns are: Backlog, Todo, In Progress, Done`
     // Move task between columns
     this.server.tool(
       "move_task",
+      "Move a task between columns",
       {
         file_path: z.string().describe("Path to the tasks.md file"),
         task_id: z.string().describe("ID of the task to move"),
         new_column: z.enum(["Backlog", "Todo", "In Progress", "Done"]).describe("Column to move the task to")
-      },
-      {
-        description: "Move a task between columns"
       },
       async ({ file_path, task_id, new_column }) => {
         try {
@@ -216,12 +206,10 @@ Valid columns are: Backlog, Todo, In Progress, Done`
     // Get a specific task
     this.server.tool(
       "get_task",
+      "Get details of a specific task",
       {
         file_path: z.string().describe("Path to the tasks.md file"),
         task_id: z.string().describe("ID of the task to retrieve")
-      },
-      {
-        description: "Get details of a specific task"
       },
       async ({ file_path, task_id }) => {
         try {

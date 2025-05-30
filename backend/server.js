@@ -336,38 +336,49 @@ app.use(async (ctx, next) => {
 // Official MCP endpoint handler using Streamable HTTP transport
 app.use(async (ctx, next) => {
   if ((ctx.path === '/mcp' || ctx.path === '/mcp/') && ctx.method === 'POST') {
+    console.log('🔧 MCP request received:', {
+      method: ctx.method,
+      path: ctx.path,
+      headers: ctx.headers,
+      bodyPreview: JSON.stringify(ctx.request.body).substring(0, 200)
+    });
+    
     try {
+      console.log('🔧 Creating new MCP server instance...');
       // In stateless mode, create a new instance for each request  
-      // to ensure complete isolation per the official docs
       const tasksServer = new TasksMCPServerOfficial();
       const server = await tasksServer.initialize();
+      console.log('🔧 MCP server initialized');
       
+      console.log('🔧 Creating StreamableHTTPServerTransport...');
       const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined, // stateless mode
+        sessionIdGenerator: undefined, // stateless mode - no sessions
       });
+      console.log('🔧 Transport created');
       
-      // Clean up when request closes
-      ctx.req.on('close', () => {
-        console.log('Request closed');
-        transport.close();
-        server.close();
-      });
-      
+      console.log('🔧 Connecting server to transport...');
       await server.connect(transport);
+      console.log('🔧 Server connected to transport');
       
-      // Use the exact pattern from the official docs
-      await transport.handleRequest(ctx.req, ctx.res, ctx.request.body);
+      console.log('🔧 Handling request with transport...');
+      
+      // Convert Koa request/response to Node.js request/response for MCP transport
+      const nodeReq = ctx.req;
+      const nodeRes = ctx.res;
+      
+      // Important: Set the response as handled to prevent Koa from interfering
+      ctx.respond = false;
+      
+      // Handle the request using the transport
+      await transport.handleRequest(nodeReq, nodeRes, ctx.request.body);
+      console.log('🔧 Transport.handleRequest completed - response sent to client');
       
     } catch (error) {
       console.error('❌ MCP request error:', error);
       console.error('❌ Stack trace:', error.stack);
-      console.error('❌ Error details:', {
-        message: error.message,
-        name: error.name,
-        code: error.code
-      });
       
-      if (!ctx.res.headersSent) {
+      // Only send error response if headers haven't been sent
+      if (!ctx.res.headersSent && ctx.respond !== false) {
         ctx.status = 500;
         ctx.body = { 
           jsonrpc: '2.0', 

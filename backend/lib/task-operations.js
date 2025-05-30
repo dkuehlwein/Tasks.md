@@ -89,32 +89,70 @@ async function getTasksFromLane(laneName) {
   }
 }
 
-async function createTask(laneName, title, content = "") {
+async function getAllTasks() {
   try {
+    const lanes = await getLanesNames();
+    const allTasks = [];
+    
+    for (const lane of lanes) {
+      const tasks = await getTasksFromLane(lane);
+      allTasks.push(...tasks);
+    }
+    
+    return allTasks;
+  } catch (error) {
+    throw new Error(`Failed to get all tasks: ${error.message}`);
+  }
+}
+
+async function createTask(laneName, title, content = "") {
+  console.log(`🔧 createTask called with:`, { laneName, title, content });
+  
+  try {
+    console.log(`🔧 Ensuring lane directory exists...`);
     // Ensure lane directory exists
     const laneDir = `${process.env.TASKS_DIR}/${laneName}`;
-    await fs.promises.mkdir(laneDir, { recursive: true });
-    await fs.promises.chown(laneDir, PUID, PGID);
+    console.log(`🔧 Lane directory path:`, laneDir);
     
+    await fs.promises.mkdir(laneDir, { recursive: true });
+    console.log(`🔧 Directory created/verified`);
+    
+    await fs.promises.chown(laneDir, PUID, PGID);
+    console.log(`🔧 Directory permissions set`);
+    
+    console.log(`🔧 Generating task ID...`);
     // Generate unique task ID
     const taskId = uuid.v4();
     const filePath = `${laneDir}/${taskId}.md`;
+    console.log(`🔧 Task ID and file path:`, { taskId, filePath });
     
+    console.log(`🔧 Creating task content...`);
     // Create task content with title
     const taskContent = title ? `# ${title}\n\n${content}` : content;
+    console.log(`🔧 Final task content:`, taskContent);
     
+    console.log(`🔧 Writing file...`);
     // Write file
     await fs.promises.writeFile(filePath, taskContent);
-    await fs.promises.chown(filePath, PUID, PGID);
+    console.log(`🔧 File written successfully`);
     
-    return {
+    console.log(`🔧 Setting file permissions...`);
+    await fs.promises.chown(filePath, PUID, PGID);
+    console.log(`🔧 File permissions set`);
+    
+    const result = {
       id: taskId,
       lane: laneName,
       title,
       content: taskContent,
+      tags: getTagsTextsFromCardContent(taskContent),
       path: filePath
     };
+    
+    console.log(`🔧 createTask completed successfully:`, result);
+    return result;
   } catch (error) {
+    console.error(`❌ Error in createTask:`, error);
     throw new Error(`Failed to create task in lane ${laneName}: ${error.message}`);
   }
 }
@@ -345,6 +383,7 @@ module.exports = {
   getTagsTextsFromCardContent,
   getCards,
   getTasksFromLane,
+  getAllTasks,
   createTask,
   updateTask,
   deleteTask,

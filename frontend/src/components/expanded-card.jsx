@@ -11,10 +11,10 @@ import { handleKeyDown, clickOutside } from "../utils";
 import { makePersisted } from "@solid-primitives/storage";
 import { NameInput } from "./name-input";
 import { Portal } from "solid-js/web";
-import { StacksEditor } from './Stacks-Editor/src/stacks-editor/editor'
+import { StacksEditor } from '@stackoverflow/stacks-editor';
 import { IconClear, IconScreenFull } from '@stackoverflow/stacks-icons/icons'
-import stacksStyle from '@stackoverflow/stacks/dist/css/stacks.css?inline'
-import stacksEditorStyle from './Stacks-Editor/src/styles/index.css?inline'
+import '@stackoverflow/stacks-editor/dist/styles.css';
+import '@stackoverflow/stacks/dist/css/stacks.css';
 
 /**
  *
@@ -472,8 +472,6 @@ function ExpandedCard(props) {
               </For>
             </div>
             <div class="dialog__content">
-              <style>{stacksEditorStyle}</style>
-              <style>{stacksStyle}</style>
               <div
                 id="editor-container"
                 autofocus

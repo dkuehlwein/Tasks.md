@@ -1,13 +1,15 @@
 const TasksMCPServer = require('./mcp-server');
+const { v4: uuidv4 } = require('uuid');
 
 /**
  * HTTP handler for MCP requests
- * Bridges between Koa web server and MCP server
+ * Bridges between Koa web server and MCP server with FastMCP session compatibility
  */
 
 class MCPHttpHandler {
   constructor() {
     this.mcpServer = null;
+    this.sessions = new Map(); // Store session data
   }
 
   async initialize() {
@@ -36,6 +38,9 @@ class MCPHttpHandler {
         case 'initialize':
           return this.handleInitialize(ctx, requestBody);
         
+        case 'notifications/initialized':
+          return this.handleNotificationsInitialized(ctx, requestBody);
+        
         default:
           return this.handleDefault(ctx, requestBody);
       }
@@ -54,7 +59,31 @@ class MCPHttpHandler {
     }
   }
 
+  // Validate session for requests that require it
+  validateSession(ctx) {
+    const sessionId = ctx.headers['mcp-session-id'];
+    if (!sessionId || !this.sessions.has(sessionId)) {
+      return null;
+    }
+    return sessionId;
+  }
+
   handleToolsList(ctx, requestBody) {
+    // Validate session for tools/list requests
+    const sessionId = this.validateSession(ctx);
+    if (!sessionId) {
+      ctx.status = 401;
+      ctx.body = {
+        jsonrpc: "2.0",
+        error: {
+          code: -32600,
+          message: "Invalid session. Please initialize first.",
+        },
+        id: requestBody.id || null
+      };
+      return;
+    }
+
     ctx.status = 200;
     ctx.set('Content-Type', 'application/json');
     ctx.body = {
@@ -68,12 +97,25 @@ class MCPHttpHandler {
 
   async handleToolCall(ctx, requestBody) {
     try {
+      // Validate session for tool calls
+      const sessionId = this.validateSession(ctx);
+      if (!sessionId) {
+        ctx.status = 401;
+        ctx.body = {
+          jsonrpc: "2.0",
+          error: {
+            code: -32600,
+            message: "Invalid session. Please initialize first.",
+          },
+          id: requestBody.id || null
+        };
+        return;
+      }
+
       const { params } = requestBody;
       const { name, arguments: toolArgs } = params;
 
       // Map tool calls to the actual MCP server tools
-      // This is a simplified version - in a real implementation,
-      // you'd want to properly route through the MCP transport
       let result;
       
       switch (name) {
@@ -127,8 +169,21 @@ class MCPHttpHandler {
   }
 
   handleInitialize(ctx, requestBody) {
+    // Generate new session ID for FastMCP compatibility
+    const sessionId = uuidv4();
+    
+    // Store session data
+    this.sessions.set(sessionId, {
+      created: new Date(),
+      initialized: false,
+      clientInfo: requestBody.params?.clientInfo || {}
+    });
+
+    // Set session ID in response header (FastMCP requirement)
+    ctx.set('mcp-session-id', sessionId);
     ctx.status = 200;
     ctx.set('Content-Type', 'application/json');
+    
     ctx.body = {
       jsonrpc: "2.0",
       result: {
@@ -140,6 +195,39 @@ class MCPHttpHandler {
       },
       id: requestBody.id || null
     };
+    
+    console.log(`🔐 MCP session created: ${sessionId}`);
+  }
+
+  handleNotificationsInitialized(ctx, requestBody) {
+    // Handle the notifications/initialized step in FastMCP protocol
+    const sessionId = ctx.headers['mcp-session-id'];
+    
+    if (!sessionId || !this.sessions.has(sessionId)) {
+      ctx.status = 401;
+      ctx.body = {
+        jsonrpc: "2.0",
+        error: {
+          code: -32600,
+          message: "Invalid session ID"
+        }
+      };
+      return;
+    }
+
+    // Mark session as fully initialized
+    const session = this.sessions.get(sessionId);
+    session.initialized = true;
+    this.sessions.set(sessionId, session);
+
+    ctx.status = 200;
+    ctx.set('Content-Type', 'application/json');
+    ctx.body = {
+      jsonrpc: "2.0"
+      // Note: notifications/initialized typically doesn't have a result
+    };
+    
+    console.log(`✅ MCP session initialized: ${sessionId}`);
   }
 
   handleDefault(ctx, requestBody) {

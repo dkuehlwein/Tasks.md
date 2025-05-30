@@ -58,7 +58,16 @@ function App() {
 			const foundTag = tags.find(
 				(tag) => tag.name.toLowerCase() === tagName.toLowerCase(),
 			);
-			const backgroundColor = getTagBackgroundCssColor(foundTag?.backgroundColor)
+			
+			let backgroundColor;
+			if (foundTag?.backgroundColor) {
+				backgroundColor = getTagBackgroundCssColor(foundTag.backgroundColor);
+			} else {
+				// Use hash-based color assignment for new tags
+				const tagColorIndex = pickTagColorIndexBasedOnHash(tagName);
+				backgroundColor = `var(--color-alt-${tagColorIndex + 1})`;
+			}
+			
 			return { name: tagName, backgroundColor };
 		});
 	}
@@ -83,8 +92,13 @@ function App() {
 			
 			console.log("Raw API responses - tags:", tags, "cards:", cardsFromApi.length, "cardsSort:", cardsSort);
 			
-			// Handle tags - ensure it's an array
-			const tagsArray = Array.isArray(tags) ? tags : [];
+			// Handle tags - backend returns { all: [], used: [] } format
+			let tagsArray = [];
+			if (Array.isArray(tags)) {
+				tagsArray = tags;
+			} else if (tags && tags.used && Array.isArray(tags.used)) {
+				tagsArray = tags.used;
+			}
 			
 			// Handle cardsSort - convert object to flat array if needed
 			let cardsSortArray = [];
@@ -113,6 +127,7 @@ function App() {
 					),
 			);
 			const newCards = [...cardsFromApiAndSorted, ...cardsFromApiNotYetSorted];
+			
 			const newCardsWithTags = newCards.map((card) => {
 				const newCard = structuredClone(card);
 				const cardTagsNames = getTags(card.content) || [];
@@ -185,7 +200,12 @@ function App() {
 		}).then((res) => res.json());
 		
 		// Handle the tags API response format {all: [], used: []}
-		const newTagsOptions = Array.isArray(newTagsResponse) ? newTagsResponse : (newTagsResponse?.used || []);
+		let newTagsOptions = [];
+		if (Array.isArray(newTagsResponse)) {
+			newTagsOptions = newTagsResponse;
+		} else if (newTagsResponse && newTagsResponse.used && Array.isArray(newTagsResponse.used)) {
+			newTagsOptions = newTagsResponse.used;
+		}
 		
 		const justAddedTags = newTagsOptions.filter(
 			(newTagOption) =>
@@ -218,20 +238,7 @@ function App() {
 	}
 
 	function getTags(text) {
-		const indexOfTagsKeyword = text.toLowerCase().indexOf("tags: ");
-		if (indexOfTagsKeyword === -1) {
-			return [];
-		}
-		let startOfTags = text.substring(indexOfTagsKeyword + "tags: ".length);
-		const lineBreak = text.indexOf("\n");
-		if (lineBreak > 0) {
-			startOfTags = startOfTags.split("\n")[0];
-		}
-		const tags = startOfTags
-			.split(",")
-			.map((tag) => tag.trim())
-			.filter((tag) => tag !== "");
-		return tags;
+		return (text.match(/#[a-zA-Z0-9_]+/g) || []).map((tag) => tag.slice(1));
 	}
 
 	function handleSortSelectOnChange(e) {

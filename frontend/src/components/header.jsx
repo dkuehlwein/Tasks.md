@@ -1,3 +1,5 @@
+import { For } from "solid-js";
+
 /**
  *
  * @param {Object} props
@@ -35,7 +37,7 @@ export function Header(props) {
 					value={props.filteredTag || "none"}
 				>
 					<option value="none">None</option>
-					<For each={props.tagOptions}>{(tag) => <option>{tag}</option>}</For>
+					<For each={props.tagOptions}>{(tag) => <option value={tag}>{tag}</option>}</For>
 				</select>
 			</div>
 			<button type="button" onClick={props.onNewLaneBtnClick}>

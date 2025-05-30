@@ -75,31 +75,10 @@ function ExpandedCard(props) {
       return setNewTagName("");
     }
 
+    // Add hashtag to the end of content
     let actualContent = editor().content;
-    let indexOfTagsKeyword = actualContent.toLowerCase().indexOf("tags: ");
-    if (indexOfTagsKeyword === -1) {
-      actualContent = `tags: \n${actualContent}`;
-      indexOfTagsKeyword = 0;
-    }
-    const tagsIndex = indexOfTagsKeyword + "tags: ".length;
-    let tagsSubstring = actualContent.substring(tagsIndex);
-    const lineBreak = actualContent.indexOf("\n");
-    if (lineBreak > 0) {
-      tagsSubstring = tagsSubstring.split("\n")[0];
-    }
-
-    // Proceed to concatenate the new tag
-    const concatenatedTags = `${tagsSubstring}${
-      tagsSubstring.length === 0 ? "" : ","
-    } ${newTagName()}`.trim();
-
-    const newContent =
-      actualContent.substring(0, tagsIndex) +
-      concatenatedTags +
-      actualContent.substring(
-        tagsIndex + tagsSubstring.length,
-        actualContent.length
-      );
+    const newTagWithHash = `#${newTagName()}`;
+    const newContent = `${actualContent} ${newTagWithHash}`;
 
     props.onContentChange(newContent);
     editor().content = newContent;
@@ -123,30 +102,11 @@ function ExpandedCard(props) {
     setShowTagPopup(false);
     setMenuCoordinates(null);
     let currentContent = editor().content;
-    let indexOfTagsKeyword = currentContent.toLowerCase().indexOf("tags: ");
-    if (indexOfTagsKeyword === -1) {
-      currentContent = `tags: \n${currentContent}`;
-      indexOfTagsKeyword = 0;
-    }
-    const tagsIndex = indexOfTagsKeyword + "tags: ".length;
-    let tagsSubstring = currentContent.substring(tagsIndex);
-    const lineBreak = currentContent.indexOf("\n");
-    if (lineBreak > 0) {
-      tagsSubstring = tagsSubstring.split("\n")[0];
-    }
-
-    const newTags = tagsSubstring
-      .split(", ")
-      .map((newTag) => newTag.trim())
-      .filter((newTag) => newTag !== tagName);
-    const newTagsSubstring = newTags.join(", ");
-    const endPart = currentContent.substring(
-      tagsIndex + tagsSubstring.length,
-      currentContent.length
-    );
-    const newContent = newTags.length
-      ? currentContent.substring(0, tagsIndex) + newTagsSubstring + endPart
-      : endPart;
+    
+    // Remove the hashtag from content
+    const tagWithHash = `#${tagName}`;
+    const newContent = currentContent.replace(new RegExp(`\\s*${tagWithHash}\\b`, 'g'), '');
+    
     editor().content = newContent;
     setClickedTag(null);
     props.onContentChange(newContent);

@@ -3,6 +3,16 @@ const { z } = require("zod");
 const taskOps = require("./task-operations");
 
 /**
+ * Clean schema helper to avoid additionalProperties and $schema warnings
+ * Converts Zod schemas to clean JSON schemas without unsupported properties
+ */
+function createCleanSchema(schemaDefinition) {
+  // Return plain JSON schema objects instead of Zod schemas
+  // This avoids the additionalProperties and $schema warnings
+  return schemaDefinition;
+}
+
+/**
  * Official MCP Server implementation for Tasks.md
  * Uses the official @modelcontextprotocol/sdk with high-level McpServer
  */
@@ -110,9 +120,16 @@ The system automatically manages file paths and uses lane-based organization.`
     this.server.tool(
       "get_lane_tasks",
       "Get all tasks from a specific lane",
-      {
-        lane: z.string().describe("Name of the lane to get tasks from")
-      },
+      createCleanSchema({
+        type: "object",
+        properties: {
+          lane: {
+            type: "string",
+            description: "Name of the lane to get tasks from"
+          }
+        },
+        required: ["lane"]
+      }),
       async ({ lane }) => {
         try {
           const tasks = await taskOps.getTasksFromLane(lane);
@@ -138,12 +155,32 @@ The system automatically manages file paths and uses lane-based organization.`
     this.server.tool(
       "add_task",
       "Add a new task to a kanban board lane",
-      {
-        title: z.string().describe("Title of the new task"),
-        lane: z.enum(["Backlog", "Todo", "In Progress", "Done"]).describe("Lane to add the task to"),
-        content: z.string().optional().describe("Optional content/description for the task"),
-        tags: z.array(z.string()).optional().describe("Optional tags for the task (will be added to content)")
-      },
+      createCleanSchema({
+        type: "object",
+        properties: {
+          title: {
+            type: "string",
+            description: "Title of the new task"
+          },
+          lane: {
+            type: "string",
+            enum: ["Backlog", "Todo", "In Progress", "Done"],
+            description: "Lane to add the task to"
+          },
+          content: {
+            type: "string",
+            description: "Optional content/description for the task"
+          },
+          tags: {
+            type: "array",
+            items: {
+              type: "string"
+            },
+            description: "Optional tags for the task (will be added to content)"
+          }
+        },
+        required: ["title", "lane"]
+      }),
       async ({ title, lane, content = "", tags = [] }) => {
         console.log(`🔧 add_task called with:`, { title, lane, content, tags });
         
@@ -189,12 +226,29 @@ The system automatically manages file paths and uses lane-based organization.`
     this.server.tool(
       "update_task",
       "Update an existing task's content",
-      {
-        task_id: z.string().describe("ID of the task to update"),
-        content: z.string().optional().describe("New content for the task"),
-        new_lane: z.enum(["Backlog", "Todo", "In Progress", "Done"]).optional().describe("New lane to move the task to"),
-        current_lane: z.string().optional().describe("Current lane of the task (for optimization, leave blank to auto-search)")
-      },
+      createCleanSchema({
+        type: "object",
+        properties: {
+          task_id: {
+            type: "string",
+            description: "ID of the task to update"
+          },
+          content: {
+            type: "string",
+            description: "New content for the task"
+          },
+          new_lane: {
+            type: "string",
+            enum: ["Backlog", "Todo", "In Progress", "Done"],
+            description: "New lane to move the task to"
+          },
+          current_lane: {
+            type: "string",
+            description: "Current lane of the task (for optimization, leave blank to auto-search)"
+          }
+        },
+        required: ["task_id"]
+      }),
       async ({ task_id, content, new_lane, current_lane }) => {
         try {
           const updates = {};
@@ -225,10 +279,20 @@ The system automatically manages file paths and uses lane-based organization.`
     this.server.tool(
       "delete_task",
       "Delete a task from the kanban board",
-      {
-        task_id: z.string().describe("ID of the task to delete"),
-        lane: z.string().optional().describe("Lane the task is in (for optimization, leave blank to auto-search)")
-      },
+      createCleanSchema({
+        type: "object",
+        properties: {
+          task_id: {
+            type: "string",
+            description: "ID of the task to delete"
+          },
+          lane: {
+            type: "string",
+            description: "Lane the task is in (for optimization, leave blank to auto-search)"
+          }
+        },
+        required: ["task_id"]
+      }),
       async ({ task_id, lane }) => {
         try {
           const result = await taskOps.deleteTask(task_id, lane);
@@ -254,11 +318,25 @@ The system automatically manages file paths and uses lane-based organization.`
     this.server.tool(
       "move_task",
       "Move a task between lanes",
-      {
-        task_id: z.string().describe("ID of the task to move"),
-        from_lane: z.string().describe("Current lane of the task"),
-        to_lane: z.enum(["Backlog", "Todo", "In Progress", "Done"]).describe("Lane to move the task to")
-      },
+      createCleanSchema({
+        type: "object",
+        properties: {
+          task_id: {
+            type: "string",
+            description: "ID of the task to move"
+          },
+          from_lane: {
+            type: "string",
+            description: "Current lane of the task"
+          },
+          to_lane: {
+            type: "string",
+            enum: ["Backlog", "Todo", "In Progress", "Done"],
+            description: "Lane to move the task to"
+          }
+        },
+        required: ["task_id", "from_lane", "to_lane"]
+      }),
       async ({ task_id, from_lane, to_lane }) => {
         try {
           const result = await taskOps.moveTask(task_id, from_lane, to_lane);
@@ -284,10 +362,20 @@ The system automatically manages file paths and uses lane-based organization.`
     this.server.tool(
       "get_task",
       "Get details of a specific task",
-      {
-        task_id: z.string().describe("ID of the task to retrieve"),
-        lane: z.string().optional().describe("Lane the task is in (for optimization, leave blank to auto-search)")
-      },
+      createCleanSchema({
+        type: "object",
+        properties: {
+          task_id: {
+            type: "string",
+            description: "ID of the task to retrieve"
+          },
+          lane: {
+            type: "string",
+            description: "Lane the task is in (for optimization, leave blank to auto-search)"
+          }
+        },
+        required: ["task_id"]
+      }),
       async ({ task_id, lane }) => {
         try {
           const task = await taskOps.getTaskContent(task_id, lane);

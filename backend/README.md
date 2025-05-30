@@ -57,7 +57,7 @@ backend/
 - `GET /api/images/:filename` - Serve image
 
 ### MCP
-- `POST /mcp` - MCP protocol endpoint for AI assistants
+- `POST /mcp/` - MCP protocol endpoint for AI assistants (also accepts `/mcp` for compatibility)
 
 ## Environment Variables
 
@@ -181,7 +181,7 @@ When adding new features:
 
 ## MCP Integration
 
-The backend includes an MCP (Model Context Protocol) server that allows AI assistants to interact with tasks. The MCP endpoint is available at `/mcp` and supports:
+The backend includes an MCP (Model Context Protocol) server that allows AI assistants to interact with tasks. The MCP endpoint is available at `/mcp/` and supports:
 
 - Task creation and management
 - Lane operations

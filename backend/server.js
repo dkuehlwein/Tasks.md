@@ -274,9 +274,9 @@ if (process.env.LOCAL_IMAGES_CLEANUP_INTERVAL) {
   }
 }
 
-// MCP endpoint handler
+// MCP endpoint handler - accept both /mcp and /mcp/
 app.use(async (ctx, next) => {
-  if (ctx.path === '/mcp' && ctx.method === 'POST') {
+  if ((ctx.path === '/mcp' || ctx.path === '/mcp/') && ctx.method === 'POST') {
     await mcpHandler.handleRequest(ctx);
     return;
   }
@@ -286,7 +286,7 @@ app.use(async (ctx, next) => {
 // Initialize MCP server on startup
 mcpHandler.initialize().then(() => {
   console.log(`🚀 Tasks.md MCP server initialized and ready`);
-  console.log(`📡 MCP endpoint available at: http://localhost:${process.env.PORT}/mcp`);
+  console.log(`📡 MCP endpoint available at: http://localhost:${process.env.PORT}/mcp/`);
 }).catch(error => {
   console.error("❌ Failed to initialize MCP server:", error);
 });

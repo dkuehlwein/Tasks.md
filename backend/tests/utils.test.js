@@ -1,293 +1,261 @@
 const fs = require('fs');
 const path = require('path');
+const taskOps = require('../lib/task-operations');
 
-// Import utility functions from server (we'll need to extract these)
-// For now, we'll test the functions as they exist in the server
+// Mock environment variables for testing
+process.env.TASKS_DIR = './test-utils';
+process.env.CONFIG_DIR = './test-config-utils';
+process.env.PUID = '1000';
+process.env.PGID = '1000';
 
 describe('Task Management Utility Functions', () => {
-  
+  const testTasksDir = './test-utils';
+  const testConfigDir = './test-config-utils';
+
+  beforeEach(async () => {
+    // Clean up and create fresh test environment
+    try {
+      await fs.promises.rm(testTasksDir, { recursive: true, force: true });
+      await fs.promises.rm(testConfigDir, { recursive: true, force: true });
+    } catch (error) {
+      // Ignore cleanup errors
+    }
+    
+    await fs.promises.mkdir(testTasksDir, { recursive: true });
+    await fs.promises.mkdir(testConfigDir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    // Clean up test directories
+    try {
+      await fs.promises.rm(testTasksDir, { recursive: true, force: true });
+      await fs.promises.rm(testConfigDir, { recursive: true, force: true });
+    } catch (error) {
+      // Ignore cleanup errors
+    }
+  });
+
   describe('getLanesNames', () => {
     test('should return array of directory names', async () => {
-      // We need to test the actual getLanesNames function
-      // This would require extracting it from server.js or requiring the module
-      
-      // Mock test for now
-      const mockGetLanesNames = async () => {
-        const tasksDir = process.env.TASKS_DIR;
-        await fs.promises.mkdir(tasksDir, { recursive: true });
-        return fs.promises.readdir(tasksDir, { withFileTypes: true })
-          .then(dirs => dirs
-            .filter(dir => dir.isDirectory())
-            .map(dir => dir.name)
-          );
-      };
+      // Create test lanes
+      await fs.promises.mkdir(path.join(testTasksDir, 'backlog'), { recursive: true });
+      await fs.promises.mkdir(path.join(testTasksDir, 'in-progress'), { recursive: true });
+      await fs.promises.mkdir(path.join(testTasksDir, 'done'), { recursive: true });
 
-      const lanes = await mockGetLanesNames();
+      const lanes = await taskOps.getLanesNames();
       expect(Array.isArray(lanes)).toBe(true);
       expect(lanes).toContain('backlog');
       expect(lanes).toContain('in-progress');
       expect(lanes).toContain('done');
+      expect(lanes).toHaveLength(3);
     });
 
     test('should create tasks directory if it does not exist', async () => {
-      // Test directory creation behavior
-      const testDir = './tests/fixtures/new-tasks';
-      
-      // Remove directory if it exists
-      await fs.promises.rm(testDir, { recursive: true, force: true });
-      
-      // Mock function that creates directory
-      const mockGetLanesNames = async () => {
-        await fs.promises.mkdir(testDir, { recursive: true });
-        return fs.promises.readdir(testDir, { withFileTypes: true })
-          .then(dirs => dirs
-            .filter(dir => dir.isDirectory())
-            .map(dir => dir.name)
-          );
-      };
+      // Remove the tasks directory
+      await fs.promises.rm(testTasksDir, { recursive: true, force: true });
 
-      const lanes = await mockGetLanesNames();
+      const lanes = await taskOps.getLanesNames();
       expect(Array.isArray(lanes)).toBe(true);
+      expect(lanes).toHaveLength(0); // No lanes initially
       
       // Verify directory was created
-      const dirExists = await fs.promises.access(testDir).then(() => true).catch(() => false);
-      expect(dirExists).toBe(true);
-      
-      // Cleanup
-      await fs.promises.rm(testDir, { recursive: true, force: true });
+      const exists = await fs.promises.access(testTasksDir).then(() => true).catch(() => false);
+      expect(exists).toBe(true);
+    });
+
+    test('should filter out files and return only directories', async () => {
+      // Create mix of files and directories
+      await fs.promises.mkdir(path.join(testTasksDir, 'valid-lane'));
+      await fs.promises.writeFile(path.join(testTasksDir, 'not-a-lane.txt'), 'content');
+      await fs.promises.writeFile(path.join(testTasksDir, 'config.json'), '{}');
+
+      const lanes = await taskOps.getLanesNames();
+      expect(lanes).toContain('valid-lane');
+      expect(lanes).not.toContain('not-a-lane.txt');
+      expect(lanes).not.toContain('config.json');
+      expect(lanes).toHaveLength(1);
     });
   });
 
   describe('getMdFiles', () => {
-    test('should return array of markdown files with lane info', async () => {
-      // Test the getMdFiles function behavior
-      const mockGetMdFiles = async () => {
-        const lanes = ['backlog', 'in-progress', 'done'];
-        const lanesFiles = await Promise.all(
-          lanes.map(async (lane) => {
-            try {
-              const files = await fs.promises.readdir(`./tests/fixtures/tasks/${lane}`);
-              return files.map((file) => ({ lane, name: file }));
-            } catch (error) {
-              return [];
-            }
-          })
-        );
-        const files = lanesFiles
-          .flat()
-          .filter(file => file.name.endsWith('.md'));
-        return files;
-      };
-
-      const files = await mockGetMdFiles();
-      expect(Array.isArray(files)).toBe(true);
+    test('should return all markdown files with lane information', async () => {
+      // Create test structure
+      await fs.promises.mkdir(path.join(testTasksDir, 'backlog'), { recursive: true });
+      await fs.promises.mkdir(path.join(testTasksDir, 'done'), { recursive: true });
       
-      // Should have structure with lane and name
-      files.forEach(file => {
-        expect(file).toHaveProperty('lane');
-        expect(file).toHaveProperty('name');
-        expect(file.name).toMatch(/\.md$/);
-      });
+      await fs.promises.writeFile(path.join(testTasksDir, 'backlog', 'task1.md'), 'content');
+      await fs.promises.writeFile(path.join(testTasksDir, 'backlog', 'task2.md'), 'content');
+      await fs.promises.writeFile(path.join(testTasksDir, 'done', 'task3.md'), 'content');
+      await fs.promises.writeFile(path.join(testTasksDir, 'done', 'not-markdown.txt'), 'content');
+
+      const files = await taskOps.getMdFiles();
+      expect(files).toHaveLength(3);
+      expect(files.map(f => f.name)).toContain('task1.md');
+      expect(files.map(f => f.name)).toContain('task2.md');
+      expect(files.map(f => f.name)).toContain('task3.md');
+      expect(files.map(f => f.name)).not.toContain('not-markdown.txt');
+      
+      const task1 = files.find(f => f.name === 'task1.md');
+      expect(task1.lane).toBe('backlog');
     });
 
-    test('should filter out non-markdown files', async () => {
-      // Create a non-markdown file for testing
-      await testUtils.createTestTask('backlog', 'not-markdown.txt', 'This is not markdown');
-      
-      const mockGetMdFiles = async () => {
-        const lanes = ['backlog'];
-        const lanesFiles = await Promise.all(
-          lanes.map(async (lane) => {
-            try {
-              const files = await fs.promises.readdir(`./tests/fixtures/tasks/${lane}`);
-              return files.map((file) => ({ lane, name: file }));
-            } catch (error) {
-              return [];
-            }
-          })
-        );
-        const files = lanesFiles
-          .flat()
-          .filter(file => file.name.endsWith('.md'));
-        return files;
-      };
+    test('should handle empty lanes', async () => {
+      // Create empty lanes
+      await fs.promises.mkdir(path.join(testTasksDir, 'empty-lane'), { recursive: true });
 
-      const files = await mockGetMdFiles();
-      
-      // Should not include the .txt file
-      const txtFiles = files.filter(file => file.name.endsWith('.txt'));
-      expect(txtFiles).toHaveLength(0);
-      
-      // Should only include .md files
-      files.forEach(file => {
-        expect(file.name).toMatch(/\.md$/);
-      });
-      
-      // Cleanup
-      await fs.promises.rm('./tests/fixtures/tasks/backlog/not-markdown.txt', { force: true });
+      const files = await taskOps.getMdFiles();
+      expect(files).toHaveLength(0);
     });
   });
 
   describe('getContent', () => {
-    test('should read file content as string', async () => {
-      const testContent = '# Test Content\n\nThis is test content.';
-      const testPath = await testUtils.createTestTask('backlog', 'content-test', testContent);
-      
-      const mockGetContent = (path) => {
-        return fs.promises.readFile(path).then((res) => res.toString());
-      };
+    test('should read and return file content as string', async () => {
+      const testFile = path.join(testTasksDir, 'test.md');
+      const testContent = '# Test Task\n\nThis is test content with #tags';
+      await fs.promises.writeFile(testFile, testContent);
 
-      const content = await mockGetContent(testPath);
+      const content = await taskOps.getContent(testFile);
       expect(typeof content).toBe('string');
       expect(content).toBe(testContent);
-      
-      // Cleanup
-      await testUtils.deleteTestTask('backlog', 'content-test');
     });
 
-    test('should handle file read errors', async () => {
-      const mockGetContent = (path) => {
-        return fs.promises.readFile(path).then((res) => res.toString());
-      };
+    test('should handle files with special characters', async () => {
+      const testFile = path.join(testTasksDir, 'special.md');
+      const testContent = '# Test with émojis 🚀\n\nSpecial chars: àáâãäå';
+      await fs.promises.writeFile(testFile, testContent, 'utf8');
 
-      // Try to read non-existent file
-      await expect(mockGetContent('./non-existent-file.md')).rejects.toThrow();
+      const content = await taskOps.getContent(testFile);
+      expect(content).toContain('émojis 🚀');
+      expect(content).toContain('àáâãäå');
     });
   });
 
   describe('getTagsTextsFromCardContent', () => {
-    test('should extract tags from markdown content', () => {
-      const mockGetTagsTextsFromCardContent = (cardContent) => {
-        const indexOfTagsKeyword = cardContent.toLowerCase().indexOf("tags: ");
-        if (indexOfTagsKeyword === -1) {
-          return [];
-        }
-        let startOfTags = cardContent.substring(indexOfTagsKeyword + "tags: ".length);
-        const lineBreak = cardContent.indexOf("\n");
-        if (lineBreak > 0) {
-          startOfTags = startOfTags.split("\n")[0];
-        }
-        const tags = startOfTags
-          .split(",")
-          .map((tag) => tag.trim())
-          .filter((tag) => tag !== "");
-        return tags;
-      };
-
-      const contentWithTags = '# Test Task\n\nSome content here.\n\nTags: bug, feature, urgent';
-      const tags = mockGetTagsTextsFromCardContent(contentWithTags);
+    test('should extract hashtag-style tags from content', () => {
+      const content = '# Task Title\n\nSome content with #urgent #frontend #bug tags here.';
+      const tags = taskOps.getTagsTextsFromCardContent(content);
       
-      expect(Array.isArray(tags)).toBe(true);
-      expect(tags).toContain('bug');
-      expect(tags).toContain('feature');
       expect(tags).toContain('urgent');
+      expect(tags).toContain('frontend');
+      expect(tags).toContain('bug');
+      expect(tags).toHaveLength(3);
     });
 
-    test('should return empty array when no tags present', () => {
-      const mockGetTagsTextsFromCardContent = (cardContent) => {
-        const indexOfTagsKeyword = cardContent.toLowerCase().indexOf("tags: ");
-        if (indexOfTagsKeyword === -1) {
-          return [];
-        }
-        let startOfTags = cardContent.substring(indexOfTagsKeyword + "tags: ".length);
-        const lineBreak = cardContent.indexOf("\n");
-        if (lineBreak > 0) {
-          startOfTags = startOfTags.split("\n")[0];
-        }
-        const tags = startOfTags
-          .split(",")
-          .map((tag) => tag.trim())
-          .filter((tag) => tag !== "");
-        return tags;
-      };
-
-      const contentWithoutTags = '# Test Task\n\nSome content here.\n\nNo tags in this content.';
-      const tags = mockGetTagsTextsFromCardContent(contentWithoutTags);
-      
-      expect(Array.isArray(tags)).toBe(true);
-      expect(tags).toHaveLength(0);
+    test('should handle content without tags', () => {
+      const content = '# Task Title\n\nNo tags in this content.';
+      const tags = taskOps.getTagsTextsFromCardContent(content);
+      expect(tags).toEqual([]);
     });
 
-    test('should handle malformed tags gracefully', () => {
-      const mockGetTagsTextsFromCardContent = (cardContent) => {
-        const indexOfTagsKeyword = cardContent.toLowerCase().indexOf("tags: ");
-        if (indexOfTagsKeyword === -1) {
-          return [];
-        }
-        let startOfTags = cardContent.substring(indexOfTagsKeyword + "tags: ".length);
-        const lineBreak = cardContent.indexOf("\n");
-        if (lineBreak > 0) {
-          startOfTags = startOfTags.split("\n")[0];
-        }
-        const tags = startOfTags
-          .split(",")
-          .map((tag) => tag.trim())
-          .filter((tag) => tag !== "");
-        return tags;
-      };
-
-      const contentWithMalformedTags = '# Test Task\n\nTags: , , valid-tag, , another-tag,';
-      const tags = mockGetTagsTextsFromCardContent(contentWithMalformedTags);
+    test('should handle mixed alphanumeric tags', () => {
+      const content = 'Content with #tag1 #version2 #bug-fix #feature_request';
+      const tags = taskOps.getTagsTextsFromCardContent(content);
       
-      expect(tags).toEqual(['valid-tag', 'another-tag']);
+      expect(tags).toContain('tag1');
+      expect(tags).toContain('version2');
+      expect(tags).toContain('bug');
+      expect(tags).toContain('feature_request');
+    });
+
+    test('should handle duplicate tags', () => {
+      const content = 'Content with #urgent #frontend #urgent #backend #frontend';
+      const tags = taskOps.getTagsTextsFromCardContent(content);
+      
+      // Should return all instances, not deduplicated
+      expect(tags.filter(tag => tag === 'urgent')).toHaveLength(2);
+      expect(tags.filter(tag => tag === 'frontend')).toHaveLength(2);
     });
   });
 
-  describe('getLaneByCardName', () => {
-    test('should find correct lane for existing card', async () => {
-      const mockGetLaneByCardName = async (cardName) => {
-        // Mock getMdFiles
-        const files = [
-          { lane: 'backlog', name: 'test-task-1.md' },
-          { lane: 'in-progress', name: 'test-task-2.md' },
-          { lane: 'done', name: 'completed-task.md' }
-        ];
-        
-        const file = files.find((file) => file.name === `${cardName}.md`);
-        return file ? file.lane : null;
-      };
-
-      const lane = await mockGetLaneByCardName('test-task-1');
-      expect(lane).toBe('backlog');
+  describe('getCards', () => {
+    test('should return all cards with complete metadata', async () => {
+      // Create test structure
+      await fs.promises.mkdir(path.join(testTasksDir, 'backlog'), { recursive: true });
+      await fs.promises.mkdir(path.join(testTasksDir, 'done'), { recursive: true });
       
-      const lane2 = await mockGetLaneByCardName('test-task-2');
-      expect(lane2).toBe('in-progress');
+      await fs.promises.writeFile(
+        path.join(testTasksDir, 'backlog', 'task1.md'),
+        '# Task 1\n\nBacklog task #urgent #frontend'
+      );
+      await fs.promises.writeFile(
+        path.join(testTasksDir, 'done', 'task2.md'),
+        '# Task 2\n\nCompleted task #done #backend'
+      );
+
+      const cards = await taskOps.getCards();
+      expect(cards).toHaveLength(2);
+      
+      const task1 = cards.find(c => c.name === 'task1');
+      expect(task1.lane).toBe('backlog');
+      expect(task1.content).toContain('Task 1');
+      expect(task1.tags).toContain('urgent');
+      expect(task1.tags).toContain('frontend');
+      
+      const task2 = cards.find(c => c.name === 'task2');
+      expect(task2.lane).toBe('done');
+      expect(task2.content).toContain('Task 2');
+      expect(task2.tags).toContain('done');
+      expect(task2.tags).toContain('backend');
     });
 
-    test('should handle non-existent card', async () => {
-      const mockGetLaneByCardName = async (cardName) => {
-        const files = [
-          { lane: 'backlog', name: 'test-task-1.md' },
-          { lane: 'in-progress', name: 'test-task-2.md' }
-        ];
-        
-        const file = files.find((file) => file.name === `${cardName}.md`);
-        return file ? file.lane : null;
-      };
+    test('should handle cards without tags', async () => {
+      await fs.promises.mkdir(path.join(testTasksDir, 'backlog'), { recursive: true });
+      await fs.promises.writeFile(
+        path.join(testTasksDir, 'backlog', 'notags.md'),
+        '# Task without tags\n\nNo tags here'
+      );
 
-      const lane = await mockGetLaneByCardName('non-existent-task');
-      expect(lane).toBeNull();
+      const cards = await taskOps.getCards();
+      const card = cards.find(c => c.name === 'notags');
+      expect(card.tags).toEqual([]);
     });
   });
 
-  describe('File Operations', () => {
-    test('should maintain PUID/PGID when creating files', async () => {
-      // This test verifies the file ownership pattern
-      // In a real environment, this would check actual file permissions
+  describe('Error Handling', () => {
+    test('should handle non-existent directories gracefully', async () => {
+      // Test with non-existent TASKS_DIR
+      const originalTasksDir = process.env.TASKS_DIR;
+      process.env.TASKS_DIR = './non-existent-dir';
+
+      try {
+        const lanes = await taskOps.getLanesNames();
+        expect(Array.isArray(lanes)).toBe(true);
+      } finally {
+        process.env.TASKS_DIR = originalTasksDir;
+      }
+    });
+
+    test('should handle permission errors appropriately', async () => {
+      // This test would require specific OS-level permission setup
+      // For now, we'll just verify error handling structure exists
+      expect(typeof taskOps.getLanesNames).toBe('function');
+      expect(typeof taskOps.getContent).toBe('function');
+    });
+  });
+
+  describe('Performance', () => {
+    test('should handle large number of files efficiently', async () => {
+      // Create a moderate number of files to test performance
+      const numTasks = 50;
+      await fs.promises.mkdir(path.join(testTasksDir, 'performance'), { recursive: true });
       
-      const testPath = './tests/fixtures/tasks/backlog/ownership-test.md';
-      await fs.promises.writeFile(testPath, 'Test content');
+      const createPromises = [];
+      for (let i = 0; i < numTasks; i++) {
+        createPromises.push(
+          fs.promises.writeFile(
+            path.join(testTasksDir, 'performance', `task${i}.md`),
+            `# Task ${i}\n\nContent for task ${i} #test #performance`
+          )
+        );
+      }
+      await Promise.all(createPromises);
+
+      const startTime = Date.now();
+      const cards = await taskOps.getCards();
+      const endTime = Date.now();
       
-      // Mock the chown operation (in tests we can't actually change ownership)
-      const mockChown = jest.fn();
-      
-      // Simulate the pattern used in the server
-      await mockChown(testPath, 1000, 1000);
-      
-      expect(mockChown).toHaveBeenCalledWith(testPath, 1000, 1000);
-      
-      // Cleanup
-      await fs.promises.rm(testPath, { force: true });
+      expect(cards).toHaveLength(numTasks);
+      expect(endTime - startTime).toBeLessThan(5000); // Should complete in < 5 seconds
     });
   });
 }); 

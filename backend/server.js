@@ -10,7 +10,11 @@ const serve = require("koa-static");
 // Import our modular components
 const taskOps = require("./lib/task-operations");
 const configOps = require("./lib/config-operations");
-const MCPHttpHandler = require("./lib/mcp-http-handler");
+
+// Import official MCP SDK components
+const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js');
+const TasksMCPServerOfficial = require('./lib/mcp-server-official');
+const { v4: uuidv4 } = require('uuid');
 
 const BASE_PATH =
   process.env.BASE_PATH.at(-1) === "/"
@@ -19,8 +23,45 @@ const BASE_PATH =
 
 const multerInstance = multer();
 
-// Initialize MCP handler
-const mcpHandler = new MCPHttpHandler();
+// MCP Server Setup - Official SDK
+const mcpTransports = {};
+let mcpServerInstance = null;
+
+async function initializeMcpServer() {
+  if (!mcpServerInstance) {
+    const tasksServer = new TasksMCPServerOfficial();
+    mcpServerInstance = await tasksServer.initialize();
+    console.log('✅ Official MCP server initialized');
+  }
+  return mcpServerInstance;
+}
+
+async function createAndConnectTransport(sessionId) {
+  if (mcpTransports[sessionId]) {
+    return mcpTransports[sessionId];
+  }
+
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: () => sessionId,
+    enableJsonResponse: true,
+    eventSourceEnabled: true
+  });
+
+  mcpTransports[sessionId] = transport;
+
+  transport.onclose = () => {
+    console.log(`🧹 MCP session cleanup: ${sessionId}`);
+    if (mcpTransports[sessionId]) {
+      delete mcpTransports[sessionId];
+    }
+  };
+
+  const server = await initializeMcpServer();
+  await server.connect(transport);
+  
+  console.log(`🔗 MCP session created: ${sessionId}`);
+  return transport;
+}
 
 // Web API utility functions (now using shared operations)
 async function getTags(ctx) {
@@ -284,28 +325,102 @@ app.use(async (ctx, next) => {
       service: "tasks-mcp-server",
       version: "1.0.0",
       timestamp: new Date().toISOString(),
-      mcp_endpoint: `/mcp/`
+      mcp_endpoint: `/mcp`,
+      active_mcp_sessions: Object.keys(mcpTransports).length
     };
     return;
   }
   await next();
 });
 
-// MCP endpoint handler - accept both /mcp and /mcp/
+// Official MCP endpoint handler using Streamable HTTP transport
 app.use(async (ctx, next) => {
   if ((ctx.path === '/mcp' || ctx.path === '/mcp/') && ctx.method === 'POST') {
-    await mcpHandler.handleRequest(ctx);
+    try {
+      // In stateless mode, create a new instance for each request  
+      // to ensure complete isolation per the official docs
+      const tasksServer = new TasksMCPServerOfficial();
+      const server = await tasksServer.initialize();
+      
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined, // stateless mode
+      });
+      
+      // Clean up when request closes
+      ctx.req.on('close', () => {
+        console.log('Request closed');
+        transport.close();
+        server.close();
+      });
+      
+      await server.connect(transport);
+      
+      // Use the exact pattern from the official docs
+      await transport.handleRequest(ctx.req, ctx.res, ctx.request.body);
+      
+    } catch (error) {
+      console.error('❌ MCP request error:', error);
+      console.error('❌ Stack trace:', error.stack);
+      console.error('❌ Error details:', {
+        message: error.message,
+        name: error.name,
+        code: error.code
+      });
+      
+      if (!ctx.res.headersSent) {
+        ctx.status = 500;
+        ctx.body = { 
+          jsonrpc: '2.0', 
+          error: { 
+            code: -32603, 
+            message: 'Internal server error during MCP request handling' 
+          }, 
+          id: ctx.request.body?.id || null 
+        };
+      }
+    }
+    return;
+  }
+  await next();
+});
+
+// MCP session termination endpoint
+app.use(async (ctx, next) => {
+  if ((ctx.path === '/mcp' || ctx.path === '/mcp/') && ctx.method === 'DELETE') {
+    const sessionId = ctx.headers['mcp-session-id'];
+    
+    if (sessionId && mcpTransports[sessionId]) {
+      const transport = mcpTransports[sessionId];
+      delete mcpTransports[sessionId];
+      
+      if (transport.close) {
+        transport.close();
+      }
+      
+      console.log(`🗑️ MCP session terminated: ${sessionId}`);
+      ctx.status = 204;
+    } else {
+      ctx.status = 404;
+      ctx.body = { 
+        jsonrpc: '2.0',
+        error: { 
+          code: -32001, 
+          message: 'Session not found' 
+        }, 
+        id: null 
+      };
+    }
     return;
   }
   await next();
 });
 
 // Initialize MCP server on startup
-mcpHandler.initialize().then(() => {
-  console.log(`🚀 Tasks.md MCP server initialized and ready`);
-  console.log(`📡 MCP endpoint available at: http://localhost:${process.env.PORT}/mcp/`);
+initializeMcpServer().then(() => {
+  console.log(`🚀 Tasks.md server with official MCP SDK initialized`);
+  console.log(`📡 MCP endpoint available at: http://localhost:${process.env.PORT}/mcp`);
 }).catch(error => {
-  console.error("❌ Failed to initialize MCP server:", error);
+  console.error("❌ Failed to initialize official MCP server:", error);
 });
 
 app.listen(process.env.PORT);

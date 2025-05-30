@@ -33,7 +33,8 @@ ENV CONFIG_DIR="/config"
 ENV TASKS_DIR="/tasks"
 ENV PUID=$PUID
 ENV PGID=$PGID
-ENV PORT=8080
+ENV PORT=8002
+
 USER root
 
 RUN set -eux \
@@ -49,7 +50,7 @@ RUN rm -r /static/stylesheets
 VOLUME /tasks
 VOLUME /config
 WORKDIR /api
-EXPOSE 8080
+EXPOSE 8002
 
 
 ENTRYPOINT mkdir -p ${TASKS_DIR} && \

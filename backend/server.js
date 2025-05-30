@@ -139,9 +139,9 @@ async function updateCard(ctx) {
 async function renameCard(ctx) {
   try {
     const lane = ctx.params.lane;
-    const oldName = ctx.params.name;
-    const newName = ctx.request.body.name;
-    await taskOps.renameTask(oldName, newName, lane);
+    const taskId = ctx.params.name;
+    const newTitle = ctx.request.body.name;
+    await taskOps.updateTaskTitle(taskId, newTitle, lane);
     ctx.status = 204;
   } catch (error) {
     ctx.status = 500;

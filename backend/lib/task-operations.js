@@ -45,34 +45,31 @@ function getTagsTextsFromCardContent(content) {
 function extractTitleFromFilename(filename) {
   const nameWithoutExt = filename.replace('.md', '');
   
-  // Check if it's new format (title-uuid)
-  const parts = nameWithoutExt.split('-');
-  if (parts.length > 1) {
-    // Check if last part looks like a UUID (contains numbers/letters and dashes)
-    const lastPart = parts[parts.length - 1];
-    if (lastPart.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)) {
-      // Last part is UUID, everything before is title
-      const titleParts = parts.slice(0, -1);
-      return titleParts.join('-').replace(/-/g, ' '); // Convert dashes back to spaces
+  // Use regex to find and remove the UUID pattern from filename
+  const uuidMatch = nameWithoutExt.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/);
+  if (uuidMatch) {
+    // Remove the UUID and the separator dash before it
+    const titlePart = nameWithoutExt.replace(`-${uuidMatch[0]}`, '');
+    // If title part is empty or just dashes, return empty string
+    if (!titlePart || titlePart === '-' || titlePart === '') {
+      return '';
     }
+    // Convert dashes back to spaces and clean up
+    return titlePart.replace(/^-+/, '').replace(/-+$/, '').replace(/-/g, ' ');
   }
   
   // Legacy format (UUID only) or unrecognized format
-  return nameWithoutExt; // Return the filename without extension as fallback
+  return nameWithoutExt;
 }
 
 // Helper function to extract UUID from filename
 function extractUUIDFromFilename(filename) {
   const nameWithoutExt = filename.replace('.md', '');
   
-  // Check if it's new format (title-uuid)
-  const parts = nameWithoutExt.split('-');
-  if (parts.length > 1) {
-    // Check if last part looks like a UUID
-    const lastPart = parts[parts.length - 1];
-    if (lastPart.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)) {
-      return lastPart;
-    }
+  // Use regex to find UUID pattern anywhere in the filename
+  const uuidMatch = nameWithoutExt.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/);
+  if (uuidMatch) {
+    return uuidMatch[0];
   }
   
   // Legacy format - assume the whole filename (without .md) is the UUID
@@ -87,12 +84,14 @@ async function getCards() {
         `${process.env.TASKS_DIR}/${file.lane}/${file.name}`
       );
       
-      // Extract title from filename, fallback to filename if extraction fails
+      // Extract both title and UUID from filename
       const title = extractTitleFromFilename(file.name);
+      const uuid = extractUUIDFromFilename(file.name);
       
       return {
         lane: file.lane,
-        name: title,
+        name: title,        // Display name (title)
+        id: uuid,          // Unique identifier for API operations
         content,
         tags: getTagsTextsFromCardContent(content),
       };
@@ -457,6 +456,34 @@ async function moveTask(taskId, fromLane, toLane) {
   }
 }
 
+async function updateTaskTitle(taskId, newTitle, lane) {
+  try {
+    // Find the current task file
+    const oldPath = await findTaskFile(taskId, lane);
+    if (!oldPath) {
+      throw new Error(`Task ${taskId} not found in lane ${lane}`);
+    }
+    
+    // Create new filename with new title but same UUID
+    const newFilename = createTaskFilename(newTitle, taskId);
+    const newPath = `${process.env.TASKS_DIR}/${lane}/${newFilename}`;
+    
+    // Read content
+    const content = await getContent(oldPath);
+    
+    // Write with new filename
+    await fs.promises.writeFile(newPath, content);
+    await fs.promises.chown(newPath, PUID, PGID);
+    
+    // Remove old file
+    await fs.promises.rm(oldPath);
+    
+    return { success: true, id: taskId, newTitle, lane, newPath };
+  } catch (error) {
+    throw new Error(`Failed to update task title for ${taskId}: ${error.message}`);
+  }
+}
+
 async function renameTask(oldTaskId, newTaskId, lane) {
   try {
     // Find the task file 
@@ -505,5 +532,6 @@ module.exports = {
   deleteLane,
   renameLane,
   moveTask,
+  updateTaskTitle,
   renameTask
 }; 

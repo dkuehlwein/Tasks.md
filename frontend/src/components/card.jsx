@@ -4,6 +4,7 @@ import { handleKeyDown } from "../utils";
  *
  * @param {Object} props
  * @param {string} props.name
+ * @param {string} props.id
  * @param {boolean} props.disableDrag
  * @param {Object[]} props.tags
  * @param {Function} props.onClick
@@ -13,7 +14,7 @@ export function Card(props) {
 	return (
 		<div
 			role="button"
-			id={`card-${props.name}`}
+			id={`card-${props.id}`}
 			class={`card ${props.disableDrag ? "card__drag-disabled" : ""}`}
 			onKeyDown={(e) => handleKeyDown(e, props.onClick)}
 			onClick={props.onClick}

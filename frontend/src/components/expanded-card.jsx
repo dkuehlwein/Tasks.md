@@ -20,6 +20,7 @@ import '@stackoverflow/stacks/dist/css/stacks.css';
  *
  * @param {Object} props
  * @param {string} props.name Card name
+ * @param {string} props.id Card unique identifier (UUID)
  * @param {string} props.content Initial card content
  * @param {boolean} props.disableImageUpload Disable local image upload button
  * @param {string[]} props.tags Card tags
@@ -123,7 +124,7 @@ function ExpandedCard(props) {
       return handleCardRenameCancel();
     }
     
-    fetch(`${api}/lanes/${props.lane}/cards/${props.name}/rename`, {
+    fetch(`${api}/lanes/${props.lane}/cards/${props.id}/rename`, {
       method: "PATCH",
       mode: "cors",
       headers: { "Content-Type": "application/json" },

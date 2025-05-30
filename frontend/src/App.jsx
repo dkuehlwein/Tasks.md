@@ -188,7 +188,7 @@ function App() {
 		);
 		const newCard = newCards[newCardIndex];
 		newCard.content = newContent;
-		await fetch(`${api}/lanes/${newCard.lane}/cards/${newCard.name}`, {
+		await fetch(`${api}/lanes/${newCard.lane}/cards/${newCard.id}`, {
 			method: "PUT",
 			mode: "cors",
 			headers: { "Content-Type": "application/json" },
@@ -269,14 +269,14 @@ function App() {
 		try {
 			setIsCreatingCard(true);
 			console.log("Creating new card in lane:", lane);
-			const newCardName = await fetch(`${api}/cards`, {
+			const newCardId = await fetch(`${api}/cards`, {
 				method: "POST",
 				mode: "cors",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ lane: lane }),
 			}).then((res) => res.text());
 			
-			console.log("Created card with name:", newCardName);
+			console.log("Created card with ID:", newCardId);
 			
 			// Refresh cards from API to ensure consistency
 			await fetchCards();
@@ -285,13 +285,13 @@ function App() {
 			
 			// Use requestAnimationFrame to ensure UI has updated before starting rename
 			requestAnimationFrame(() => {
-				const newCard = cards().find(card => card.name === newCardName && card.lane === lane);
+				const newCard = cards().find(card => card.id === newCardId && card.lane === lane);
 				if (newCard) {
 					console.log("Found new card, starting rename:", newCard);
 					startRenamingCard(newCard);
 				} else {
-					console.error("Could not find newly created card:", newCardName, "in lane:", lane);
-					console.error("Available cards:", cards().map(c => ({ name: c.name, lane: c.lane })));
+					console.error("Could not find newly created card with ID:", newCardId, "in lane:", lane);
+					console.error("Available cards:", cards().map(c => ({ id: c.id, name: c.name, lane: c.lane })));
 				}
 			});
 		} catch (error) {
@@ -302,7 +302,7 @@ function App() {
 	}
 
 	async function deleteCard(card) {
-		await fetch(`${api}/lanes/${card.lane}/cards/${card.name}`, {
+		await fetch(`${api}/lanes/${card.lane}/cards/${card.id}`, {
 			method: "DELETE",
 			mode: "cors",
 		});
@@ -398,7 +398,7 @@ function App() {
 	async function handleDeleteCardsByLane(lane) {
 		const cardsToDelete = cards().filter((card) => card.lane === lane);
 		for (const card of cardsToDelete) {
-			await fetch(`${api}/lanes/${card.lane}/cards/${card.name}`, { method: "DELETE", mode: "cors" });
+			await fetch(`${api}/lanes/${card.lane}/cards/${card.id}`, { method: "DELETE", mode: "cors" });
 		}
 		
 		// Refresh cards from API to ensure consistency
@@ -413,7 +413,7 @@ function App() {
 		const newCard = newCards[newCardIndex];
 		const newCardNameWithoutSpaces = newCardName().trim();
 		
-		await fetch(`${api}/lanes/${newCard.lane}/cards/${newCard.name}/rename`, {
+		await fetch(`${api}/lanes/${newCard.lane}/cards/${newCard.id}/rename`, {
 			method: "PATCH",
 			mode: "cors",
 			headers: { "Content-Type": "application/json" },
@@ -561,11 +561,11 @@ function App() {
 
 	function handleCardsSortChange(changedCard) {
 		const cardLane = changedCard.to.slice("lane-content-".length);
-		const cardName = changedCard.id.slice("card-".length);
-		const oldIndex = cards().findIndex((card) => card.name === cardName);
+		const cardId = changedCard.id.slice("card-".length);
+		const oldIndex = cards().findIndex((card) => card.id === cardId);
 		const oldCard = cards()[oldIndex];
 		
-		fetch(`${api}/lanes/${oldCard.lane}/cards/${cardName}`, {
+		fetch(`${api}/lanes/${oldCard.lane}/cards/${oldCard.id}`, {
 			method: "PATCH",
 			mode: "cors",
 			headers: { "Content-Type": "application/json" },
@@ -576,7 +576,7 @@ function App() {
 		newCard.lane = cardLane;
 		const newCards = lanes().flatMap((lane) => {
 			let laneCards = cards().filter(
-				(card) => card.lane === lane && card.name !== cardName,
+				(card) => card.lane === lane && card.id !== cardId,
 			);
 			if (lane === cardLane) {
 				laneCards = [
@@ -650,6 +650,7 @@ function App() {
 										{(card) => (
 											<Card
 												name={card.name}
+												id={card.id}
 												tags={card.tags}
 												onClick={() => setSelectedCard(card)}
 												headerSlot={
@@ -696,6 +697,7 @@ function App() {
 			<Show when={!!selectedCard()}>
 				<ExpandedCard
 					name={selectedCard().name}
+					id={selectedCard().id}
 					lane={selectedCard().lane}
 					content={selectedCard().content}
 					tags={selectedCard().tags || []}

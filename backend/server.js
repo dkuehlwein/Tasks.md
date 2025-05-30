@@ -274,6 +274,23 @@ if (process.env.LOCAL_IMAGES_CLEANUP_INTERVAL) {
   }
 }
 
+// Health endpoint
+app.use(async (ctx, next) => {
+  if (ctx.path === '/health' && ctx.method === 'GET') {
+    ctx.status = 200;
+    ctx.set('Content-Type', 'application/json');
+    ctx.body = {
+      status: "healthy",
+      service: "tasks-mcp-server",
+      version: "1.0.0",
+      timestamp: new Date().toISOString(),
+      mcp_endpoint: `/mcp/`
+    };
+    return;
+  }
+  await next();
+});
+
 // MCP endpoint handler - accept both /mcp and /mcp/
 app.use(async (ctx, next) => {
   if ((ctx.path === '/mcp' || ctx.path === '/mcp/') && ctx.method === 'POST') {
